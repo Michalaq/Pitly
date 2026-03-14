@@ -15,7 +15,7 @@ public class CapitalGainsTaxEngine
     public async Task<List<TradeResult>> CalculateAsync(List<Trade> trades)
     {
         var results = new List<TradeResult>();
-        var buyLots = new Dictionary<string, Queue<(decimal Quantity, decimal CostPerSharePln, decimal CommissionPerSharePln)>>();
+        var buyLots = new Dictionary<string, LinkedList<(decimal Quantity, decimal CostPerSharePln, decimal CommissionPerSharePln)>>();
 
         var sorted = trades.OrderBy(t => t.DateTime).ToList();
 
@@ -34,13 +34,13 @@ public class CapitalGainsTaxEngine
             }
 
             if (!buyLots.ContainsKey(trade.Symbol))
-                buyLots[trade.Symbol] = new Queue<(decimal, decimal, decimal)>();
+                buyLots[trade.Symbol] = new LinkedList<(decimal, decimal, decimal)>();
 
             if (trade.Type == TradeType.Buy)
             {
                 var costPerSharePln = trade.Price * rate;
                 var commissionPerSharePln = (trade.Commission / trade.Quantity) * rate;
-                buyLots[trade.Symbol].Enqueue((trade.Quantity, costPerSharePln, commissionPerSharePln));
+                buyLots[trade.Symbol].AddLast((trade.Quantity, costPerSharePln, commissionPerSharePln));
 
                 var totalCostPln = trade.Quantity * costPerSharePln + trade.Commission * rate;
 
@@ -67,11 +67,11 @@ public class CapitalGainsTaxEngine
 
                 decimal totalCostPln = 0;
                 var remainingQty = trade.Quantity;
-                var queue = buyLots[trade.Symbol];
+                var lots = buyLots[trade.Symbol];
 
-                while (remainingQty > 0 && queue.Count > 0)
+                while (remainingQty > 0 && lots.Count > 0)
                 {
-                    var lot = queue.Peek();
+                    var lot = lots.First!.Value;
                     var usedQty = Math.Min(remainingQty, lot.Quantity);
 
                     totalCostPln += usedQty * (lot.CostPerSharePln + lot.CommissionPerSharePln);
@@ -79,15 +79,11 @@ public class CapitalGainsTaxEngine
 
                     if (usedQty >= lot.Quantity)
                     {
-                        queue.Dequeue();
+                        lots.RemoveFirst();
                     }
                     else
                     {
-                        queue.Dequeue();
-                        queue = new Queue<(decimal, decimal, decimal)>(
-                            new[] { (lot.Quantity - usedQty, lot.CostPerSharePln, lot.CommissionPerSharePln) }
-                                .Concat(queue));
-                        buyLots[trade.Symbol] = queue;
+                        lots.First!.Value = (lot.Quantity - usedQty, lot.CostPerSharePln, lot.CommissionPerSharePln);
                     }
                 }
 

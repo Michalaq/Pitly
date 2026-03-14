@@ -40,6 +40,18 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors();
 
+static object ProjectSummary(SessionEntity s) => new
+{
+    s.TotalProceedsPln,
+    s.TotalCostPln,
+    s.CapitalGainPln,
+    s.CapitalGainTaxPln,
+    s.TotalDividendsPln,
+    s.TotalWithholdingPln,
+    s.DividendTaxOwedPln,
+    s.Year
+};
+
 app.MapPost("/api/import", async (HttpRequest request, AppDbContext db, INbpExchangeRateService rateService) =>
 {
     if (!request.HasFormContentType)
@@ -119,17 +131,7 @@ app.MapPost("/api/import", async (HttpRequest request, AppDbContext db, INbpExch
     return Results.Ok(new
     {
         sessionId,
-        summary = new
-        {
-            summary.TotalProceedsPln,
-            summary.TotalCostPln,
-            summary.CapitalGainPln,
-            summary.CapitalGainTaxPln,
-            summary.TotalDividendsPln,
-            summary.TotalWithholdingPln,
-            summary.DividendTaxOwedPln,
-            summary.Year
-        },
+        summary = ProjectSummary(session),
         trades = summary.TradeResults,
         dividends = summary.Dividends
     });
@@ -183,17 +185,7 @@ app.MapGet("/api/session/{sessionId}/summary", async (Guid sessionId, AppDbConte
     if (session is null)
         return Results.NotFound(new { error = "Session not found" });
 
-    return Results.Ok(new
-    {
-        session.TotalProceedsPln,
-        session.TotalCostPln,
-        session.CapitalGainPln,
-        session.CapitalGainTaxPln,
-        session.TotalDividendsPln,
-        session.TotalWithholdingPln,
-        session.DividendTaxOwedPln,
-        session.Year
-    });
+    return Results.Ok(ProjectSummary(session));
 });
 
 app.MapGet("/api/session/{sessionId}/pit38", async (Guid sessionId, AppDbContext db) =>

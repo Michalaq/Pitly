@@ -115,9 +115,9 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
       ) : (
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-8">
           <div className="space-y-4">
-            {steps.map(({ key, label }) => {
-              const idx = steps.findIndex(s => s.key === key);
+            {(() => {
               const currentIdx = steps.findIndex(s => s.key === step);
+              return steps.map(({ key, label }, idx) => {
               const isDone = idx < currentIdx || step === 'done';
               const isCurrent = idx === currentIdx && step !== 'done';
 
@@ -135,7 +135,8 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
                   </span>
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
         </div>
       )}

@@ -1,31 +1,29 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Info } from 'lucide-react';
 import { formatPln, formatUsd, formatRate, formatDate } from '../format';
 import type { AppState } from '../types';
+import EmptyState from '../components/EmptyState';
+
+const PL_TAX_RATE = 0.19;
 
 export default function DividendsPage({ state }: { state: AppState }) {
-  const navigate = useNavigate();
-
   if (!state.sessionId || !state.summary) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400">
-        <p className="mb-4">No data imported yet.</p>
-        <button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-lg transition-colors">
-          Import Statement
-        </button>
-      </div>
-    );
+    return <EmptyState />;
   }
 
   const { dividends } = state;
 
-  const totals = useMemo(() => ({
-    amountPln: dividends.reduce((s, d) => s + d.amountPln, 0),
-    withholdingPln: dividends.reduce((s, d) => s + d.withholdingTaxPln, 0),
-    plTax: dividends.reduce((s, d) => s + d.amountPln * 0.19, 0),
-    netOwed: dividends.reduce((s, d) => s + Math.max(d.amountPln * 0.19 - d.withholdingTaxPln, 0), 0),
-  }), [dividends]);
+  const totals = useMemo(() => {
+    let amountPln = 0, withholdingPln = 0, plTax = 0, netOwed = 0;
+    for (const d of dividends) {
+      const tax = d.amountPln * PL_TAX_RATE;
+      amountPln += d.amountPln;
+      withholdingPln += d.withholdingTaxPln;
+      plTax += tax;
+      netOwed += Math.max(tax - d.withholdingTaxPln, 0);
+    }
+    return { amountPln, withholdingPln, plTax, netOwed };
+  }, [dividends]);
 
   return (
     <div className="space-y-6">
@@ -56,7 +54,7 @@ export default function DividendsPage({ state }: { state: AppState }) {
             </thead>
             <tbody>
               {dividends.map((d, i) => {
-                const plTax = d.amountPln * 0.19;
+                const plTax = d.amountPln * PL_TAX_RATE;
                 const netOwed = Math.max(plTax - d.withholdingTaxPln, 0);
                 return (
                   <tr

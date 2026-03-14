@@ -1,22 +1,13 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Coins, Landmark, CreditCard } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { formatPln, numColor } from '../format';
 import type { AppState } from '../types';
+import EmptyState from '../components/EmptyState';
 
 export default function DashboardPage({ state }: { state: AppState }) {
-  const navigate = useNavigate();
-
   if (!state.sessionId || !state.summary) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400">
-        <p className="mb-4">No data imported yet.</p>
-        <button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-lg transition-colors">
-          Import Statement
-        </button>
-      </div>
-    );
+    return <EmptyState />;
   }
 
   const { summary, trades } = state;

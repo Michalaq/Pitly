@@ -1,10 +1,12 @@
+const plnFormatter = new Intl.NumberFormat('pl-PL', {
+  style: 'currency',
+  currency: 'PLN',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export function formatPln(value: number): string {
-  const abs = Math.abs(value);
-  const fixed = abs.toFixed(2);
-  const [intPart, decPart] = fixed.split('.');
-  const withSpaces = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
-  const formatted = `${withSpaces},${decPart} PLN`;
-  return value < 0 ? `-${formatted}` : formatted;
+  return plnFormatter.format(value);
 }
 
 export function formatUsd(value: number): string {
@@ -15,12 +17,10 @@ export function formatRate(value: number): string {
   return value.toFixed(4);
 }
 
+const dateFormatter = new Intl.DateTimeFormat('pl-PL');
+
 export function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
+  return dateFormatter.format(new Date(dateStr));
 }
 
 export function numColor(value: number): string {

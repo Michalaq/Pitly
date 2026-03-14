@@ -6,6 +6,7 @@ namespace Pitly.Core.Tax;
 
 public class TaxCalculator
 {
+    private const decimal TaxRate = 0.19m;
     private readonly CapitalGainsTaxEngine _capitalGainsEngine;
     private readonly DividendTaxEngine _dividendEngine;
 
@@ -17,19 +18,22 @@ public class TaxCalculator
 
     public async Task<TaxSummary> CalculateAsync(ParsedStatement statement)
     {
-        var tradeResults = await _capitalGainsEngine.CalculateAsync(statement.Trades);
-        var dividends = await _dividendEngine.CalculateAsync(
+        var tradeResultsTask = _capitalGainsEngine.CalculateAsync(statement.Trades);
+        var dividendsTask = _dividendEngine.CalculateAsync(
             statement.Dividends, statement.WithholdingTaxes);
+        await Task.WhenAll(tradeResultsTask, dividendsTask);
+        var tradeResults = tradeResultsTask.Result;
+        var dividends = dividendsTask.Result;
 
         var sellResults = tradeResults.Where(t => t.Type == TradeType.Sell).ToList();
         var totalProceedsPln = sellResults.Sum(t => t.ProceedsPln);
         var totalCostPln = sellResults.Sum(t => t.CostPln);
         var capitalGain = totalProceedsPln - totalCostPln;
-        var capitalGainTax = capitalGain > 0 ? Math.Round(capitalGain * 0.19m, 2) : 0;
+        var capitalGainTax = capitalGain > 0 ? Math.Round(capitalGain * TaxRate, 2) : 0;
 
         var totalDividendsPln = dividends.Sum(d => d.AmountPln);
         var totalWithholdingPln = dividends.Sum(d => d.WithholdingTaxPln);
-        var polishDividendTax = Math.Round(totalDividendsPln * 0.19m, 2);
+        var polishDividendTax = Math.Round(totalDividendsPln * TaxRate, 2);
         var withholdingCredit = Math.Min(totalWithholdingPln, polishDividendTax);
         var dividendTaxOwed = Math.Max(polishDividendTax - withholdingCredit, 0);
 
@@ -55,7 +59,7 @@ public class TaxCalculator
         var c24 = summary.CapitalGainTaxPln;
 
         var d25 = summary.TotalDividendsPln;
-        var d26 = Math.Round(d25 * 0.19m, 2);
+        var d26 = Math.Round(d25 * TaxRate, 2);
 
         var e27 = Math.Round(Math.Min(summary.TotalWithholdingPln, d26), 2);
         var e28 = Math.Round(Math.Max(d26 - e27, 0), 2);
@@ -79,10 +83,9 @@ public class TaxCalculator
     private static int DetermineYear(ParsedStatement statement)
     {
         var allDates = statement.Trades.Select(t => t.DateTime)
-            .Concat(statement.Dividends.Select(d => d.Date))
-            .ToList();
+            .Concat(statement.Dividends.Select(d => d.Date));
 
-        if (allDates.Count == 0) return DateTime.Now.Year;
-        return allDates.GroupBy(d => d.Year).OrderByDescending(g => g.Count()).First().Key;
+        var grouped = allDates.GroupBy(d => d.Year).OrderByDescending(g => g.Count()).FirstOrDefault();
+        return grouped?.Key ?? DateTime.Now.Year;
     }
 }

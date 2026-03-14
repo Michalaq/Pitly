@@ -1,35 +1,40 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import { Printer, FileText } from 'lucide-react';
 import { formatPln } from '../format';
-import { getPit38 } from '../api';
-import type { AppState, Pit38Fields } from '../types';
+import type { AppState, Pit38Fields, TaxSummary } from '../types';
+import EmptyState from '../components/EmptyState';
+
+const TAX_RATE = 0.19;
+
+function buildPit38(s: TaxSummary): Pit38Fields {
+  const c22 = s.capitalGainPln;
+  const c23 = c22 > 0 ? c22 : 0;
+  const c24 = s.capitalGainTaxPln;
+  const d25 = s.totalDividendsPln;
+  const d26 = Math.round(d25 * TAX_RATE * 100) / 100;
+  const e27 = Math.round(Math.min(s.totalWithholdingPln, d26) * 100) / 100;
+  const e28 = Math.round(Math.max(d26 - e27, 0) * 100) / 100;
+  return {
+    year: s.year,
+    c20_Przychody: s.totalProceedsPln,
+    c21_Koszty: s.totalCostPln,
+    c22_DochodStrata: c22,
+    c23_PodstawaObliczenia: c23,
+    c24_Podatek19: c24,
+    d25_PrzychodyDywidendy: d25,
+    d26_ZryczaltowanyPodatek19: d26,
+    e27_PodatekZaplaconyZagranica: e27,
+    e28_PodatekDoZaplaty: e28,
+    totalTaxOwed: c24 + e28,
+  };
+}
 
 export default function Pit38Page({ state }: { state: AppState }) {
-  const navigate = useNavigate();
-  const [pit38, setPit38] = useState<Pit38Fields | null>(null);
-
-  useEffect(() => {
-    if (state.sessionId) {
-      getPit38(state.sessionId).then(setPit38).catch(() => {});
-    }
-  }, [state.sessionId]);
-
   if (!state.sessionId || !state.summary) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400">
-        <p className="mb-4">No data imported yet.</p>
-        <button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-lg transition-colors">
-          Import Statement
-        </button>
-      </div>
-    );
+    return <EmptyState />;
   }
 
-  if (!pit38) {
-    return <div className="text-slate-400 text-center mt-20">Loading PIT-38 data...</div>;
-  }
-
+  const pit38 = useMemo(() => buildPit38(state.summary!), [state.summary]);
   const year = pit38.year;
 
   return (

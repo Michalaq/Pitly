@@ -17,7 +17,9 @@ public static partial class IbActivityParser
     public static ParsedStatement Parse(string csvContent)
     {
         if (string.IsNullOrWhiteSpace(csvContent))
-            throw new FormatException("File is empty.");
+        {
+            throw new FormatException("File is empty.");   
+        }
 
         var lines = csvContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var trades = new List<Trade>();
@@ -103,50 +105,44 @@ public static partial class IbActivityParser
             Math.Abs(commission), realizedPnl, tradeType));
     }
 
-    private static void TryParseDividend(List<string> fields, List<RawDividend> dividends)
+    private static (string Symbol, string Currency, DateTime Date, decimal Amount)? TryParseIncomeRow(
+        List<string> fields, bool skipReversals)
     {
-        if (fields.Count < 5) return;
+        if (fields.Count < 6) return null;
 
         var discriminator = Clean(fields[1]);
-        if (discriminator != "Data") return;
+        if (discriminator != "Data") return null;
 
         var currency = Clean(fields[2]);
         var dateStr = Clean(fields[3]);
         var description = Clean(fields[4]);
         var amountStr = Clean(fields[5]);
 
-        if (description.Contains("Total", StringComparison.OrdinalIgnoreCase)) return;
-        if (description.Contains("Reversal", StringComparison.OrdinalIgnoreCase)) return;
+        if (description.Contains("Total", StringComparison.OrdinalIgnoreCase)) return null;
+        if (skipReversals && description.Contains("Reversal", StringComparison.OrdinalIgnoreCase)) return null;
 
         var symbol = ExtractSymbolFromDescription(description);
-        if (symbol == null) return;
+        if (symbol == null) return null;
 
-        if (!TryParseDate(dateStr, out var date)) return;
-        if (!TryParseDecimal(amountStr, out var amount)) return;
+        if (!TryParseDate(dateStr, out var date)) return null;
+        if (!TryParseDecimal(amountStr, out var amount)) return null;
 
+        return (symbol, currency, date, amount);
+    }
+
+    private static void TryParseDividend(List<string> fields, List<RawDividend> dividends)
+    {
+        var row = TryParseIncomeRow(fields, skipReversals: true);
+        if (row is null) return;
+        var (symbol, currency, date, amount) = row.Value;
         dividends.Add(new RawDividend(symbol, currency, date, amount));
     }
 
     private static void TryParseWithholdingTax(List<string> fields, List<RawWithholdingTax> taxes)
     {
-        if (fields.Count < 5) return;
-
-        var discriminator = Clean(fields[1]);
-        if (discriminator != "Data") return;
-
-        var currency = Clean(fields[2]);
-        var dateStr = Clean(fields[3]);
-        var description = Clean(fields[4]);
-        var amountStr = Clean(fields[5]);
-
-        if (description.Contains("Total", StringComparison.OrdinalIgnoreCase)) return;
-
-        var symbol = ExtractSymbolFromDescription(description);
-        if (symbol == null) return;
-
-        if (!TryParseDate(dateStr, out var date)) return;
-        if (!TryParseDecimal(amountStr, out var amount)) return;
-
+        var row = TryParseIncomeRow(fields, skipReversals: false);
+        if (row is null) return;
+        var (symbol, currency, date, amount) = row.Value;
         taxes.Add(new RawWithholdingTax(symbol, currency, date, Math.Abs(amount)));
     }
 

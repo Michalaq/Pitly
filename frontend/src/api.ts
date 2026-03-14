@@ -1,4 +1,4 @@
-import type { ImportResponse, TradesPage, DividendResult, TaxSummary, Pit38Fields } from './types';
+import type { ImportResponse, TradesPage, DividendResult, TaxSummary } from './types';
 
 const BASE = '/api';
 
@@ -39,12 +39,6 @@ export async function getDividends(sessionId: string): Promise<DividendResult[]>
 export async function getSummary(sessionId: string): Promise<TaxSummary> {
   const res = await fetch(`${BASE}/session/${sessionId}/summary`);
   if (!res.ok) throw new Error('Failed to load summary');
-  return res.json();
-}
-
-export async function getPit38(sessionId: string): Promise<Pit38Fields> {
-  const res = await fetch(`${BASE}/session/${sessionId}/pit38`);
-  if (!res.ok) throw new Error('Failed to load PIT-38');
   return res.json();
 }
 

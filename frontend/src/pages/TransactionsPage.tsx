@@ -1,13 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowUpDown, Search } from 'lucide-react';
 import { formatPln, formatUsd, formatRate, formatDate, numColor } from '../format';
 import type { AppState, TradeResult } from '../types';
+import EmptyState from '../components/EmptyState';
 
 type SortKey = 'dateTime' | 'symbol' | 'gainLossPln';
 
 export default function TransactionsPage({ state }: { state: AppState }) {
-  const navigate = useNavigate();
   const [symbolFilter, setSymbolFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Buy' | 'Sell'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('dateTime');
@@ -16,14 +15,7 @@ export default function TransactionsPage({ state }: { state: AppState }) {
   const pageSize = 25;
 
   if (!state.sessionId || !state.summary) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400">
-        <p className="mb-4">No data imported yet.</p>
-        <button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-lg transition-colors">
-          Import Statement
-        </button>
-      </div>
-    );
+    return <EmptyState />;
   }
 
   const filtered = useMemo(() => {
@@ -45,12 +37,14 @@ export default function TransactionsPage({ state }: { state: AppState }) {
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const totals = useMemo(() => {
-    const sells = filtered.filter(t => t.type === 'Sell');
-    return {
-      proceeds: sells.reduce((s, t) => s + t.proceedsPln, 0),
-      cost: sells.reduce((s, t) => s + t.costPln, 0),
-      gainLoss: sells.reduce((s, t) => s + t.gainLossPln, 0),
-    };
+    let proceeds = 0, cost = 0, gainLoss = 0;
+    for (const t of filtered) {
+      if (t.type !== 'Sell') continue;
+      proceeds += t.proceedsPln;
+      cost += t.costPln;
+      gainLoss += t.gainLossPln;
+    }
+    return { proceeds, cost, gainLoss };
   }, [filtered]);
 
   const toggleSort = (key: SortKey) => {
