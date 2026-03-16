@@ -206,6 +206,7 @@ function Val({ v }: { v: number }) {
 
 function EpityGuide({ pit38, year, hasDividends }: { pit38: Pit38Fields; year: number; hasDividends: boolean }) {
   const [open, setOpen] = useState(false);
+  const hasCapitalGains = pit38.poz22Przychody > 0 || pit38.poz23Koszty > 0;
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
@@ -214,7 +215,7 @@ function EpityGuide({ pit38, year, hasDividends }: { pit38: Pit38Fields; year: n
         className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-700/30 transition-colors"
       >
         <h2 className="text-white text-lg font-semibold">
-          Step-by-step guide: File PIT-38 via e-pity
+          Step-by-step guide: File PIT-38 via e-pity Kreator
         </h2>
         {open
           ? <ChevronUp className="w-5 h-5 text-slate-400 shrink-0" />
@@ -224,193 +225,181 @@ function EpityGuide({ pit38, year, hasDividends }: { pit38: Pit38Fields; year: n
       {open && (
         <div className="px-6 pb-6 space-y-6 border-t border-slate-700">
           <p className="text-slate-400 text-sm pt-4">
-            e-pity is a free program for filing Polish tax returns. Below is a complete walkthrough
-            for filing your PIT-38 with the exact values from your Interactive Brokers statement.
-            Your values are highlighted in <span className="text-blue-400">blue</span>.
+            This guide walks you through the <strong className="text-slate-300">e-pity.pl Kreator PIT</strong> web
+            version, step by step. Your calculated values are shown in <span className="text-blue-400">blue</span>.
           </p>
 
           {/* Step 1 */}
-          <GuideStep n={1} title="Open e-pity and select PIT-38">
+          <GuideStep n={1} title="Sposob opodatkowania">
             <p>
-              Go to <span className="text-blue-400">e-pity.pl</span> and download the program
-              (available for Windows, Mac, Linux) or use the online version.
+              Go to <span className="text-blue-400">e-pity.pl</span> &rarr; <strong className="text-white">Kreator
+              PIT</strong> (in the left sidebar). You can also go directly to the Kreator
+              at <span className="text-blue-400">e-pity.pl/pit-online/kreator-{year}/</span>.
             </p>
-            <p>Launch the program and select <strong className="text-white">PIT-38</strong> as
-              the form type for tax year <strong className="text-white">{year}</strong>.</p>
+            <ul className="list-disc list-inside space-y-1 mt-2">
+              <li>Sposob opodatkowania: select <strong className="text-white">indywidualnie</strong></li>
+              <li>Cel zlozenia deklaracji: select <strong className="text-white">zlozenie zeznania</strong></li>
+              <li>You can optionally check &quot;Pobierz Twoj e-PIT&quot; to import pre-filled data from podatki.gov.pl</li>
+            </ul>
+            <p>Click <strong className="text-white">DALEJ</strong>.</p>
           </GuideStep>
 
           {/* Step 2 */}
-          <GuideStep n={2} title="Part A — Tax office and purpose">
+          <GuideStep n={2} title="Dane podatnika">
             <p>
-              Select <strong className="text-white">&quot;Zlozenie zeznania&quot;</strong> (filing
-              a return) as the purpose. Choose your tax office (Urzad Skarbowy) based on your
-              place of residence as of December 31, {year}.
+              Enter or verify your personal data: PESEL, full name, date of birth, and residential
+              address as of December 31, {year}. If you used e-pity before, this may be pre-filled.
             </p>
+            <p>Click <strong className="text-white">DALEJ</strong>.</p>
           </GuideStep>
 
           {/* Step 3 */}
-          <GuideStep n={3} title="Part B — Personal data">
+          <GuideStep n={3} title="Przychody podatnika — add income source">
             <p>
-              Enter your PESEL (or NIP), full name, date of birth, and current residential address.
-              If you used e-pity before, this may be pre-filled.
+              On the &quot;Dodaj przychody podatnika&quot; screen, click
+              the <strong className="text-white">+ POZOSTALE</strong> button.
+            </p>
+            <p>
+              From the dropdown, under &quot;Pozostale przychody&quot;, select:<br />
+              <strong className="text-white">Przychody kapitalowe ze sprzedazy udzialow (PIT-38)</strong>
+            </p>
+            <p className="text-slate-500 text-xs">
+              Do NOT click &quot;PIT-8C&quot; — IB is a foreign broker and does not issue PIT-8C.
             </p>
           </GuideStep>
 
           {/* Step 4 */}
-          <GuideStep n={4} title="Part C — Capital gains (poz. 20-27)">
+          <GuideStep n={4} title="Przychody podatnika — enter capital gains values">
             <p>
-              This is where you enter your stock trading results. Since Interactive Brokers is a
-              foreign broker and does not issue PIT-8C, you must use row&nbsp;2 &quot;Inne
-              przychody&quot;:
+              After selecting PIT-38 income, the Kreator shows two fields.
+              These map to PIT-38 poz. 22-23 (&quot;Inne przychody&quot; row):
             </p>
             <ul className="list-disc list-inside space-y-2 mt-2">
               <li>
-                <strong className="text-white">Poz. 20-21</strong> (Przychody z PIT-8C)
-                — leave <strong className="text-white">empty</strong>
+                <strong className="text-white">&quot;Wpisz przychody z czesci E podlegajace opodatkowaniu&quot;</strong>
+                {' '}&rarr; enter <Val v={pit38.poz22Przychody} />
+                <span className="block text-slate-500 text-xs ml-6">
+                  This is your total proceeds from selling securities in PLN (poz. 22).
+                  {!hasCapitalGains && ' Enter 0 if you had no sell trades this year.'}
+                </span>
               </li>
               <li>
-                <strong className="text-white">Poz. 22</strong> (Inne przychody — Przychod)
-                — enter <Val v={pit38.poz22Przychody} />
-              </li>
-              <li>
-                <strong className="text-white">Poz. 23</strong> (Inne przychody — Koszty)
-                — enter <Val v={pit38.poz23Koszty} />
+                <strong className="text-white">&quot;Wpisz koszty zwiazane z przychodami z czesci E&quot;</strong>
+                {' '}&rarr; enter <Val v={pit38.poz23Koszty} />
+                <span className="block text-slate-500 text-xs ml-6">
+                  This is your total acquisition cost (FIFO) plus commissions in PLN (poz. 23).
+                  {!hasCapitalGains && ' Enter 0 if you had no sell trades this year.'}
+                </span>
               </li>
             </ul>
-            <p className="mt-2">
-              The program will auto-calculate the totals (poz. 24-25) and determine whether you
-              have a gain (poz. 26) or loss (poz. 27):
-            </p>
-            <ul className="list-disc list-inside space-y-1 mt-1">
-              {pit38.poz26Dochod > 0 && (
-                <li>Poz. 26 (Dochod): <Val v={pit38.poz26Dochod} /></li>
-              )}
-              {pit38.poz27Strata > 0 && (
-                <li>Poz. 27 (Strata): <Val v={pit38.poz27Strata} /></li>
-              )}
-              {pit38.poz26Dochod === 0 && pit38.poz27Strata === 0 && (
-                <li>No gain or loss (both poz. 26 and 27 are empty)</li>
-              )}
-            </ul>
+            {!hasCapitalGains && (
+              <div className="bg-slate-700/30 rounded-lg p-3 mt-2">
+                <p className="text-slate-400 text-xs">
+                  You had no sell trades in {year}, so both fields are 0. You still need to file
+                  PIT-38 to report your foreign dividends.
+                </p>
+              </div>
+            )}
+            <p className="mt-2">Click <strong className="text-white">DALEJ</strong>.</p>
           </GuideStep>
 
           {/* Step 5 */}
-          <GuideStep n={5} title="Part D — Tax calculation (poz. 28-33)">
-            <p>
-              <strong className="text-white">Poz. 28</strong> (Straty z lat ubieglych) — if you
-              have unused losses from the past 5 years, enter the amount to deduct here (max 50%
-              of each year&apos;s loss). Otherwise leave empty.
-            </p>
-            <p>The program will auto-calculate:</p>
-            <ul className="list-disc list-inside space-y-1 mt-1">
-              <li>Poz. 29 (Podstawa obliczenia): <Val v={pit38.poz29PodstawaObliczenia} /> (rounded to full PLN)</li>
-              <li>Poz. 30 (Stawka podatku): <span className="font-mono text-white">19%</span></li>
-              <li>Poz. 31 (Podatek): <Val v={pit38.poz31Podatek} /></li>
-              <li>Poz. 32 (Podatek zaplacony za granica) — leave empty for typical IB stock trades</li>
-              <li>Poz. 33 (Podatek nalezny): <Val v={pit38.poz33PodatekNalezny} /> (rounded to full PLN)</li>
-            </ul>
+          <GuideStep n={5} title={'PIT-38 — obliczenie zobowiazania podatkowego'}>
+            <p>This is the main tax calculation screen. Fill in the following fields from top to bottom:</p>
+
+            <div className="space-y-4 mt-3">
+              <div>
+                <p className="text-white font-medium text-xs uppercase tracking-wider mb-1">Straty z lat ubieglych</p>
+                <p>
+                  If you have unused losses from the past 5 years (max 50% per year), enter the amount.
+                  Otherwise leave empty.
+                </p>
+              </div>
+
+              <div>
+                <p className="text-white font-medium text-xs uppercase tracking-wider mb-1">Zryczaltowany podatek dochodowy</p>
+                <p>Leave empty (this is for other flat-rate taxes not withheld by a payer, poz. 44).</p>
+              </div>
+
+              <div>
+                <p className="text-white font-medium text-xs uppercase tracking-wider mb-1">
+                  Zryczaltowany podatek od przychodow uzyskanych poza granicami RP
+                </p>
+                {hasDividends ? (
+                  <p>
+                    Enter <Val v={pit38.poz45ZryczaltowanyPodatek} /> (poz. 45)
+                    <span className="block text-slate-500 text-xs">
+                      This is 19% of your total gross dividends in PLN ({formatPln(pit38.totalDividendsPln)})
+                    </span>
+                  </p>
+                ) : (
+                  <p>Leave empty — no foreign dividends to report.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-white font-medium text-xs uppercase tracking-wider mb-1">
+                  Kwoty podatku zaplaconego za granica (przeliczone na zlote)
+                </p>
+                {hasDividends ? (
+                  <p>
+                    Enter <Val v={pit38.poz46PodatekZaplaconyZaGranica} /> (poz. 46)
+                    <span className="block text-slate-500 text-xs">
+                      US withholding tax already deducted by IB, converted to PLN. Cannot exceed poz. 45.
+                    </span>
+                  </p>
+                ) : (
+                  <p>Leave empty.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-white font-medium text-xs uppercase tracking-wider mb-1">
+                  Suma zaliczek / Dochody zwolnione z IPO / Monthly breakdown
+                </p>
+                <p>Leave all remaining fields empty (unless you have other specific circumstances).</p>
+              </div>
+            </div>
+            <p className="mt-2">Click <strong className="text-white">DALEJ</strong>.</p>
           </GuideStep>
 
           {/* Step 6 */}
-          <GuideStep n={6} title="Parts E-F — Virtual currencies">
-            <p>
-              Skip these sections unless you traded cryptocurrency. They cover art. 30b ust. 1a
-              (virtual currency transactions).
-            </p>
-          </GuideStep>
-
-          {/* Step 7 */}
-          <GuideStep n={7} title="Part G — Foreign dividends (poz. 44-50)">
-            {hasDividends ? (
-              <>
-                <p>
-                  This section is for reporting dividends received from foreign companies (US stocks
-                  in your case). The values go into specific fields:
-                </p>
-                <ul className="list-disc list-inside space-y-2 mt-2">
-                  <li>
-                    <strong className="text-white">Poz. 45</strong> (Zryczaltowany podatek 19%
-                    od dywidend) — enter <Val v={pit38.poz45ZryczaltowanyPodatek} />
-                    <span className="block text-slate-500 text-xs ml-6">
-                      This is 19% of your total gross dividends ({formatPln(pit38.totalDividendsPln)})
-                    </span>
-                  </li>
-                  <li>
-                    <strong className="text-white">Poz. 46</strong> (Podatek zaplacony za
-                    granica) — enter <Val v={pit38.poz46PodatekZaplaconyZaGranica} />
-                    <span className="block text-slate-500 text-xs ml-6">
-                      US withholding tax already deducted by IB (cannot exceed poz. 45)
-                    </span>
-                  </li>
-                </ul>
-                <p className="mt-2">The program will calculate:</p>
-                <ul className="list-disc list-inside space-y-1 mt-1">
-                  <li>Poz. 47 (Roznica): <Val v={pit38.poz47Roznica} /> (rounded to full PLN)</li>
-                  <li>Poz. 49 (Podatek do zaplaty): <Val v={pit38.poz49PodatekDoZaplaty} /></li>
-                </ul>
-              </>
-            ) : (
-              <p>
-                You have no dividend income to report. Leave poz. 45-46 empty.
-              </p>
-            )}
-          </GuideStep>
-
-          {/* Step 8 */}
-          <GuideStep n={8} title="Attachment PIT/ZG — Foreign income">
-            <p>
-              Since your income is from a foreign broker, you <strong className="text-white">must</strong> attach
-              the <strong className="text-white">PIT/ZG</strong> form. In e-pity, go to
-              &quot;Zalaczniki&quot; (Attachments) and add PIT/ZG.
-            </p>
-            <ul className="list-disc list-inside space-y-2 mt-2">
-              <li>
-                Select country: <strong className="text-white">Stany Zjednoczone (USA)</strong> /
-                country code <strong className="text-white">US</strong>
-              </li>
-              <li>
-                In Part C.2 of PIT/ZG (income from art. 30b — capital gains):
-                enter your revenue (<Val v={pit38.poz22Przychody} />) and
-                costs (<Val v={pit38.poz23Koszty} />)
-              </li>
-              {hasDividends && (
-                <li>
-                  In Part C.4 of PIT/ZG (income from art. 30a — dividends):
-                  enter your dividend income (<Val v={pit38.totalDividendsPln} />) and
-                  withholding tax paid (<Val v={pit38.poz46PodatekZaplaconyZaGranica} />)
-                </li>
-              )}
-            </ul>
-          </GuideStep>
-
-          {/* Step 9 */}
-          <GuideStep n={9} title="Part J — 1.5% for charity (optional)">
+          <GuideStep n={6} title="Przekaz 1,5% podatku (optional)">
             <p>
               You can donate 1.5% of your tax to a Public Benefit Organization (OPP). Enter
               the KRS number of your chosen organization. This does not increase your tax — it
-              redirects part of what you already owe.
+              redirects part of what you already owe. Skip if not interested.
             </p>
+            <p>Click <strong className="text-white">DALEJ</strong>.</p>
           </GuideStep>
 
-          {/* Step 10 */}
-          <GuideStep n={10} title="Review and submit">
-            <p>
-              Review all fields in the summary screen. The program will highlight any errors or
-              missing fields.
-            </p>
-            <ul className="list-disc list-inside space-y-2 mt-2">
+          {/* Step 7 */}
+          <GuideStep n={7} title="Podsumowanie — review and submit">
+            <p>The summary screen shows your calculated tax:</p>
+            <ul className="list-disc list-inside space-y-1 mt-2">
+              <li>Kwota dochodu: {hasCapitalGains ? formatPln(pit38.poz26Dochod) : '0,00 zl'}</li>
+              <li>Kwota do zaplaty: <Val v={pit38.poz49PodatekDoZaplaty} /></li>
+            </ul>
+            <p className="mt-3">From here you can:</p>
+            <ul className="list-disc list-inside space-y-2 mt-1">
               <li>
-                Click <strong className="text-white">&quot;Wyslij e-deklaracje&quot;</strong> to
-                submit electronically
+                Click <strong className="text-white">&quot;ZOBACZ DEKLARACJE&quot;</strong> to
+                preview the full PIT-38 form and verify all field numbers
               </li>
               <li>
-                Authorize with your PESEL, date of birth, and last year&apos;s revenue amount
-                (from PIT for {year - 1})
+                Click <strong className="text-white">&quot;WYSLIJ E-DEKLARACJE&quot;</strong> to
+                submit electronically to the tax office
               </li>
               <li>
-                Save the <strong className="text-white">UPO</strong> (Urzedowe Poswiadczenie
-                Odbioru) — this is your official receipt confirming submission
+                After submission, save the <strong className="text-white">UPO</strong> (Urzedowe
+                Poswiadczenie Odbioru) — your official receipt
               </li>
+              {pit38.poz49PodatekDoZaplaty > 0 && (
+                <li>
+                  Click <strong className="text-white">&quot;ZAPLAC PODATEK ONLINE&quot;</strong> or
+                  &quot;DRUK PRZELEWU&quot; to pay
+                </li>
+              )}
             </ul>
             <p className="mt-2">
               Deadline: <strong className="text-white">April 30, {year + 1}</strong>.
@@ -424,9 +413,10 @@ function EpityGuide({ pit38, year, hasDividends }: { pit38: Pit38Fields; year: n
             <p className="text-amber-300 font-medium mb-1">Important notes</p>
             <ul className="list-disc list-inside space-y-1 text-slate-400">
               <li>PIT-38 is filed individually — joint filing with a spouse is not allowed for this form</li>
-              <li>Even if you only have losses, you <strong className="text-slate-300">must still file</strong> PIT-38 to carry them forward</li>
+              <li>Even if you only have losses or only dividends, you <strong className="text-slate-300">must still file</strong> PIT-38</li>
               <li>Losses from capital gains can be deducted over the next 5 years (max 50% of each year&apos;s loss per year)</li>
               <li>All PLN amounts use NBP Table A mid rates from the last business day before each transaction</li>
+              <li>e-pity automatically generates the PIT/ZG attachment for foreign income when you submit</li>
             </ul>
           </div>
         </div>
