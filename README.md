@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://pitly.xyz"><strong>pitly.xyz</strong></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet" alt=".NET 10">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React 19">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
