@@ -8,6 +8,7 @@ public record Trade(
     decimal Price,
     decimal Proceeds,
     decimal Commission,
+    string CommissionCurrency,
     decimal RealizedPnL,
     TradeType Type);
 

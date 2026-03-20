@@ -12,10 +12,30 @@ const steps: { key: Step; label: string }[] = [
   { key: 'done', label: 'Complete!' },
 ];
 
+function HelpSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-6 py-4 text-left text-slate-300 hover:text-white transition-colors"
+      >
+        <span className="font-medium">{title}</span>
+        {open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
+      {open && (
+        <div className="px-6 pb-5 text-slate-400 text-sm space-y-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ImportPage({ onComplete }: { onComplete: (data: AppState) => void }) {
   const [step, setStep] = useState<Step>('idle');
   const [error, setError] = useState('');
-  const [helpOpen, setHelpOpen] = useState(false);
+
   const [dragOver, setDragOver] = useState(false);
 
   const processFile = useCallback(async (file: File) => {
@@ -68,7 +88,7 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
     <div className="max-w-2xl mx-auto mt-16">
       <h1 className="text-white text-3xl font-bold text-center mb-2">Import Activity Statement</h1>
       <p className="text-slate-400 text-center mb-10">
-        Upload your Interactive Brokers Activity Statement to calculate Polish taxes
+        Upload your broker statement to calculate Polish taxes
       </p>
 
       {!isProcessing ? (
@@ -94,22 +114,20 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
             </div>
           )}
 
-          <div className="mt-8 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-            <button
-              onClick={() => setHelpOpen(!helpOpen)}
-              className="w-full flex items-center justify-between px-6 py-4 text-left text-slate-300 hover:text-white transition-colors"
-            >
-              <span className="font-medium">How to export from Interactive Brokers</span>
-              {helpOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-            </button>
-            {helpOpen && (
-              <div className="px-6 pb-5 text-slate-400 text-sm space-y-2">
-                <p>1. Log in to IB Client Portal</p>
-                <p>2. Go to <strong className="text-slate-300">Reports &rarr; Statements &rarr; Activity</strong></p>
-                <p>3. Select period (full year), format: <strong className="text-slate-300">CSV</strong></p>
-                <p>4. Download and upload here</p>
-              </div>
-            )}
+          <div className="mt-8 space-y-2">
+            <HelpSection title="How to export from Interactive Brokers">
+              <p>1. Log in to IB Client Portal</p>
+              <p>2. Go to <strong className="text-slate-300">Reports &rarr; Statements &rarr; Activity</strong></p>
+              <p>3. Select period (full year), format: <strong className="text-slate-300">CSV</strong></p>
+              <p>4. Download and upload here</p>
+            </HelpSection>
+            <HelpSection title="How to export from Trading 212">
+              <p>1. Log in to Trading 212</p>
+              <p>2. Go to <strong className="text-slate-300">History</strong> (clock icon)</p>
+              <p>3. Click the <strong className="text-slate-300">Download</strong> icon</p>
+              <p>4. Select date range (full tax year) and export as CSV</p>
+              <p>5. Upload here</p>
+            </HelpSection>
           </div>
         </>
       ) : (

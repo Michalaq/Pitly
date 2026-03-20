@@ -5,7 +5,7 @@ const features = [
   {
     icon: Upload,
     title: 'CSV Import',
-    description: 'Drag and drop your Interactive Brokers Activity Statement. Pitly handles the rest.',
+    description: 'Drag and drop your broker statement — Interactive Brokers or Trading 212. Pitly handles the rest.',
   },
   {
     icon: ArrowRightLeft,
@@ -35,11 +35,16 @@ export default function LandingPage() {
           <p className="text-xl text-slate-300 text-center max-w-md mb-2">
             PIT-38 tax calculator for
             <br />
-            Interactive Brokers users in Poland
+            foreign stock investors in Poland
           </p>
-          <p className="text-slate-500 text-center max-w-sm mb-10">
-            Upload your IB Activity Statement CSV and get exact PIT-38 field values in seconds.
+          <p className="text-slate-500 text-center max-w-sm mb-6">
+            Upload your broker statement CSV and get exact PIT-38 field values in seconds.
           </p>
+          <div className="flex items-center gap-2 mb-10">
+            <span className="text-xs text-slate-500">Supports:</span>
+            <span className="text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded-full px-3 py-1">Interactive Brokers</span>
+            <span className="text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded-full px-3 py-1">Trading 212</span>
+          </div>
           <Link
             to="/app"
             className="inline-flex items-center gap-2 bg-[#863bff] hover:bg-[#7429ff] text-white font-medium px-7 py-3 rounded-lg transition-colors mb-6"

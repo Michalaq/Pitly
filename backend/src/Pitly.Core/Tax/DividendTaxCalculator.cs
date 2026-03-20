@@ -17,9 +17,7 @@ public class DividendTaxCalculator : IDividendTaxCalculator
         _rateService = rateService;
     }
 
-    public async Task<List<Dividend>> CalculateAsync(
-        List<RawDividend> rawDividends,
-        List<RawWithholdingTax> rawWithholdingTaxes)
+    public async Task<List<Dividend>> CalculateAsync(List<RawDividend> rawDividends, List<RawWithholdingTax> rawWithholdingTaxes)
     {
         var results = new List<Dividend>();
 
@@ -31,9 +29,18 @@ public class DividendTaxCalculator : IDividendTaxCalculator
             var withholdingAmount = matchingTax?.Amount ?? 0;
 
             var rate = await _rateService.GetRateAsync(div.Currency, div.Date);
-
             var amountPln = div.Amount * rate;
-            var withholdingPln = withholdingAmount * rate;
+
+            decimal withholdingPln;
+            if (matchingTax != null && !matchingTax.Currency.Equals(div.Currency, StringComparison.OrdinalIgnoreCase))
+            {
+                var withholdingRate = await _rateService.GetRateAsync(matchingTax.Currency, div.Date);
+                withholdingPln = withholdingAmount * withholdingRate;
+            }
+            else
+            {
+                withholdingPln = withholdingAmount * rate;
+            }
 
             results.Add(new Dividend(
                 Symbol: div.Symbol,

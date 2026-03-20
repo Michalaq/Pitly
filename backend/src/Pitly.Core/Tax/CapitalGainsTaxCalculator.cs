@@ -34,10 +34,14 @@ public class CapitalGainsTaxCalculator : ICapitalGainsTaxCalculator
             if (trade.Type == TradeType.Buy)
             {
                 var costPerSharePln = trade.Price * rate;
-                var commissionPerSharePln = (trade.Commission / trade.Quantity) * rate;
+                var commissionRate = trade.CommissionCurrency.Equals(trade.Currency, StringComparison.OrdinalIgnoreCase)
+                    ? rate
+                    : await _rateService.GetRateAsync(trade.CommissionCurrency, trade.DateTime);
+                var commissionPln = trade.Commission * commissionRate;
+                var commissionPerSharePln = commissionPln / trade.Quantity;
                 buyLots[trade.Symbol].AddLast((trade.Quantity, costPerSharePln, commissionPerSharePln));
 
-                var totalCostPln = trade.Quantity * costPerSharePln + trade.Commission * rate;
+                var totalCostPln = trade.Quantity * costPerSharePln + commissionPln;
 
                 results.Add(new TradeResult(
                     Symbol: trade.Symbol,
@@ -56,7 +60,10 @@ public class CapitalGainsTaxCalculator : ICapitalGainsTaxCalculator
             else
             {
                 var proceedsPln = trade.Proceeds * rate;
-                var sellCommissionPln = trade.Commission * rate;
+                var sellCommissionRate = trade.CommissionCurrency.Equals(trade.Currency, StringComparison.OrdinalIgnoreCase)
+                    ? rate
+                    : await _rateService.GetRateAsync(trade.CommissionCurrency, trade.DateTime);
+                var sellCommissionPln = trade.Commission * sellCommissionRate;
                 var netProceedsPln = proceedsPln - sellCommissionPln;
 
                 decimal totalCostPln = 0;

@@ -1,9 +1,9 @@
 using System.Globalization;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Pitly.Core.Models;
 using Pitly.Core.Parsing;
+using static Pitly.Core.Parsing.CsvHelpers;
 
 namespace Pitly.Broker.InteractiveBrokers;
 
@@ -130,7 +130,7 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
         proceeds = Math.Abs(proceeds);
 
         trades.Add(new Trade(symbol, currency, dateTime, quantity, price, proceeds,
-            Math.Abs(commission), realizedPnl, tradeType));
+            Math.Abs(commission), currency, realizedPnl, tradeType));
     }
 
     private (string Symbol, string Currency, DateTime Date, decimal Amount)? TryParseIncomeRow(
@@ -201,8 +201,6 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
     [GeneratedRegex(@"^(\w+)\s*\(")]
     private static partial Regex SymbolRegex();
 
-    private static string Clean(string value) => value.Trim().Trim('"').Trim();
-
     private static bool TryParseDateTime(string s, out DateTime result)
     {
         var formats = new[] { "yyyy-MM-dd, HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd" };
@@ -216,36 +214,4 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
             CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
     }
 
-    private static bool TryParseDecimal(string s, out decimal result)
-    {
-        return decimal.TryParse(s.Replace(",", ""), NumberStyles.Any,
-            CultureInfo.InvariantCulture, out result);
-    }
-
-    private static List<string> ParseCsvLine(string line)
-    {
-        var fields = new List<string>();
-        var inQuotes = false;
-        var current = new StringBuilder();
-
-        for (int i = 0; i < line.Length; i++)
-        {
-            var c = line[i];
-            if (c == '"')
-            {
-                inQuotes = !inQuotes;
-            }
-            else if (c == ',' && !inQuotes)
-            {
-                fields.Add(current.ToString());
-                current.Clear();
-            }
-            else
-            {
-                current.Append(c);
-            }
-        }
-        fields.Add(current.ToString());
-        return fields;
-    }
 }

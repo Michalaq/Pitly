@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/Pitly.Core/Pitly.Core.csproj Pitly.Core/
 COPY src/Pitly.Broker.InteractiveBrokers/Pitly.Broker.InteractiveBrokers.csproj Pitly.Broker.InteractiveBrokers/
+COPY src/Pitly.Broker.Trading212/Pitly.Broker.Trading212.csproj Pitly.Broker.Trading212/
 COPY src/Pitly.Api/Pitly.Api.csproj Pitly.Api/
 RUN dotnet restore Pitly.Api/Pitly.Api.csproj
 COPY src/ .
