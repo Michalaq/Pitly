@@ -4,7 +4,7 @@ namespace Pitly.Api.Services;
 
 public interface IImportService
 {
-    Task<ImportResult> ImportStatementAsync(Stream fileStream);
+    Task<ImportResult> ImportStatementsAsync(IReadOnlyList<Stream> fileStreams);
 }
 
 public record ImportResult(Guid SessionId, TaxSummary Summary);

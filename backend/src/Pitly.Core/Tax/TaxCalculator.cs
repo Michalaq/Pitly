@@ -4,7 +4,7 @@ namespace Pitly.Core.Tax;
 
 public interface ITaxCalculator
 {
-    Task<TaxSummary> CalculateAsync(ParsedStatement statement);
+    Task<TaxSummary> CalculateAsync(ParsedStatement statement, int targetYear);
 }
 
 public class TaxCalculator : ITaxCalculator
@@ -20,11 +20,12 @@ public class TaxCalculator : ITaxCalculator
         _dividendTaxCalculator = dividendTaxCalculator;
     }
 
-    public async Task<TaxSummary> CalculateAsync(ParsedStatement statement)
+    public async Task<TaxSummary> CalculateAsync(ParsedStatement statement, int targetYear)
     {
-        var tradeResultsTask = _capitalGainsCalculator.CalculateAsync(statement.Trades);
+        var tradeResultsTask = _capitalGainsCalculator.CalculateAsync(statement, targetYear);
         var dividendsTask = _dividendTaxCalculator.CalculateAsync(
-            statement.Dividends, statement.WithholdingTaxes);
+            statement.Dividends.Where(d => d.Date.Year == targetYear).ToList(),
+            statement.WithholdingTaxes.Where(t => t.Date.Year == targetYear).ToList());
         await Task.WhenAll(tradeResultsTask, dividendsTask);
         var tradeResults = tradeResultsTask.Result;
         var dividends = dividendsTask.Result;
@@ -41,8 +42,6 @@ public class TaxCalculator : ITaxCalculator
         var withholdingCredit = Math.Min(totalWithholdingPln, polishDividendTax);
         var dividendTaxOwed = Math.Max(polishDividendTax - withholdingCredit, 0);
 
-        var year = DetermineYear(statement);
-
         return new TaxSummary(
             TotalProceedsPln: Math.Round(totalProceedsPln, 2),
             TotalCostPln: Math.Round(totalCostPln, 2),
@@ -51,21 +50,8 @@ public class TaxCalculator : ITaxCalculator
             TotalDividendsPln: Math.Round(totalDividendsPln, 2),
             TotalWithholdingPln: Math.Round(totalWithholdingPln, 2),
             DividendTaxOwedPln: Math.Round(dividendTaxOwed, 2),
-            Year: year,
+            Year: targetYear,
             TradeResults: tradeResults,
             Dividends: dividends);
-    }
-
-    private static int DetermineYear(ParsedStatement statement)
-    {
-        var allDates = statement.Trades.Select(t => t.DateTime)
-            .Concat(statement.Dividends.Select(d => d.Date))
-            .ToList();
-
-        if (allDates.Count == 0)
-            throw new FormatException(
-                "The statement contains no trades or dividends. Please check that the uploaded file is a valid broker export.");
-
-        return allDates.GroupBy(d => d.Year).OrderByDescending(g => g.Count()).First().Key;
     }
 }

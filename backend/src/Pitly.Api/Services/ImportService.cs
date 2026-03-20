@@ -21,17 +21,35 @@ public class ImportService : IImportService
         _logger = logger;
     }
 
-    public async Task<ImportResult> ImportStatementAsync(Stream fileStream)
+    public async Task<ImportResult> ImportStatementsAsync(IReadOnlyList<Stream> fileStreams)
     {
-        using var reader = new StreamReader(fileStream);
-        var content = await reader.ReadToEndAsync();
+        if (fileStreams.Count == 0)
+            throw new FormatException("No files uploaded.");
 
-        _logger.LogInformation("Parsing statement ({Length} chars)", content.Length);
-        var parsed = _parser.Parse(content);
-        _logger.LogInformation("Parsed {Trades} trades, {Dividends} dividends, {Taxes} withholding taxes",
-            parsed.Trades.Count, parsed.Dividends.Count, parsed.WithholdingTaxes.Count);
+        var statements = new List<ParsedStatement>();
 
-        var summary = await _calculator.CalculateAsync(parsed);
+        for (var i = 0; i < fileStreams.Count; i++)
+        {
+            using var reader = new StreamReader(fileStreams[i], leaveOpen: true);
+            var content = await reader.ReadToEndAsync();
+
+            _logger.LogInformation("Parsing statement {Index}/{Count} ({Length} chars)", i + 1, fileStreams.Count, content.Length);
+            var parsed = _parser.Parse(content);
+            statements.Add(parsed);
+            _logger.LogInformation(
+                "Parsed statement {Index}/{Count}: {Trades} trades, {Dividends} dividends, {Taxes} withholding taxes, {Actions} corporate actions",
+                i + 1,
+                fileStreams.Count,
+                parsed.Trades.Count,
+                parsed.Dividends.Count,
+                parsed.WithholdingTaxes.Count,
+                parsed.CorporateActions?.Count ?? 0);
+        }
+
+        var targetYear = DetermineTargetYear(statements);
+        var merged = MergeStatements(statements, targetYear);
+
+        var summary = await _calculator.CalculateAsync(merged, targetYear);
         _logger.LogInformation("Tax calculation complete for year {Year}: capital gain {Gain} PLN, dividend tax owed {DivTax} PLN",
             summary.Year, summary.CapitalGainPln, summary.DividendTaxOwedPln);
 
@@ -41,5 +59,52 @@ public class ImportService : IImportService
 
         _logger.LogInformation("Session {SessionId} saved", session.Id);
         return new ImportResult(session.Id, summary);
+    }
+
+    private static int DetermineTargetYear(IReadOnlyList<ParsedStatement> statements)
+    {
+        var years = statements
+            .Select(GetStatementYear)
+            .ToList();
+
+        if (years.Count == 0)
+        {
+            throw new FormatException(
+                "The uploaded files contain no trades or dividends. Please check that the CSV export is valid.");
+        }
+
+        return years.Max();
+    }
+
+    private static int GetStatementYear(ParsedStatement statement)
+    {
+        if (statement.StatementYear is not null)
+            return statement.StatementYear.Value;
+
+        var years = statement.Trades.Select(t => t.DateTime.Year)
+            .Concat(statement.Dividends.Select(d => d.Date.Year))
+            .Concat(statement.WithholdingTaxes.Select(t => t.Date.Year))
+            .Concat((statement.CorporateActions ?? []).Select(a => a.DateTime.Year))
+            .Concat((statement.CarryInPositions ?? []).Select(p => p.Year))
+            .ToList();
+
+        if (years.Count == 0)
+        {
+            throw new FormatException(
+                "The uploaded files contain no trades or dividends. Please check that the CSV export is valid.");
+        }
+
+        return years.Max();
+    }
+
+    private static ParsedStatement MergeStatements(IReadOnlyList<ParsedStatement> statements, int targetYear)
+    {
+        return new ParsedStatement(
+            Trades: statements.SelectMany(s => s.Trades).OrderBy(t => t.DateTime).ToList(),
+            Dividends: statements.SelectMany(s => s.Dividends).OrderBy(d => d.Date).ToList(),
+            WithholdingTaxes: statements.SelectMany(s => s.WithholdingTaxes).OrderBy(t => t.Date).ToList(),
+            CorporateActions: statements.SelectMany(s => s.CorporateActions ?? []).OrderBy(a => a.DateTime).ToList(),
+            CarryInPositions: statements.SelectMany(s => s.CarryInPositions ?? []).ToList(),
+            StatementYear: targetYear);
     }
 }

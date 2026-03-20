@@ -1,0 +1,49 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Pitly.Broker.InteractiveBrokers;
+using Pitly.Core.Models;
+
+namespace Pitly.Tests;
+
+public class InteractiveBrokersStatementParserTests
+{
+    private static readonly InteractiveBrokersStatementParser Parser =
+        new(NullLogger<InteractiveBrokersStatementParser>.Instance);
+
+    [Fact]
+    public void Parse_ExtractsStatementYearCarryInSplitAndTradeIsin()
+    {
+        var csv = """
+                  Statement,Data,Period,"January 1, 2025 - December 31, 2025"
+                  Mark-to-Market Performance Summary,Header,Asset Category,Symbol,Prior Quantity,Current Quantity,Prior Price,Current Price,Mark-to-Market P/L Position,Mark-to-Market P/L Transaction,Mark-to-Market P/L Commissions,Mark-to-Market P/L Other,Mark-to-Market P/L Total,Code
+                  Mark-to-Market Performance Summary,Data,Stocks,IBKR,0.8847,43.9033,176.6700,64.3100,-120.2959,-13.720535,-2.00516057,3.65,-132.37159557,
+                  Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+                  Trades,Data,Order,Stocks,USD,IBKR,"2025-09-19, 09:30:01",-3.1,65.317741935,65.03,202.485,-1.0005828,-61.624803,139.859614,0.892,C;FPA;P
+                  Corporate Actions,Header,Asset Category,Currency,Report Date,Date/Time,Description,Quantity,Proceeds,Value,Realized P/L,Code
+                  Corporate Actions,Data,Stocks,USD,2025-06-18,"2025-06-17, 20:25:00","IBKR(US45841N1072) Split 4 for 1 (IBKR, INTERACTIVE BROKERS GRO-CL A, US45841N1072)",2.6607,0,0,0,
+                  Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Underlying,Listing Exch,Multiplier,Type,Code
+                  Financial Instrument Information,Data,Stocks,IBKR,INTERACTIVE BROKERS GRO-CL A,43645865,US45841N1072,IBKR,NASDAQ,1,COMMON,
+                  """;
+
+        var parsed = Parser.Parse(csv);
+
+        Assert.Equal(2025, parsed.StatementYear);
+
+        var trade = Assert.Single(parsed.Trades);
+        Assert.Equal(TradeType.Sell, trade.Type);
+        Assert.Equal("US45841N1072", trade.Isin);
+
+        var carryIn = Assert.Single(parsed.CarryInPositions!);
+        Assert.Equal("IBKR", carryIn.Symbol);
+        Assert.Equal(0.8847m, carryIn.Quantity);
+        Assert.Equal(2025, carryIn.Year);
+        Assert.Equal("US45841N1072", carryIn.Isin);
+
+        var split = Assert.Single(parsed.CorporateActions!);
+        Assert.Equal(CorporateActionType.StockSplit, split.Type);
+        Assert.Equal("IBKR", split.Symbol);
+        Assert.Equal(4m, split.Numerator);
+        Assert.Equal(1m, split.Denominator);
+        Assert.Equal(4m, split.Factor);
+        Assert.Equal("US45841N1072", split.Isin);
+    }
+}

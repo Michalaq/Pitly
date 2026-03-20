@@ -100,7 +100,11 @@ public class Trading212StatementParser : IStatementParser
             "Parsed Trading 212 statement: {Trades} trades, {Dividends} dividends, {Withholdings} withholding tax entries",
             trades.Count, dividends.Count, withholdingTaxes.Count);
 
-        return new ParsedStatement(trades, dividends, withholdingTaxes);
+        return new ParsedStatement(
+            trades,
+            dividends,
+            withholdingTaxes,
+            StatementYear: DetermineStatementYear(trades, dividends, withholdingTaxes));
     }
 
     private record HeaderColumn(int Index, string RawName, string? CurrencyCode);
@@ -401,6 +405,25 @@ public class Trading212StatementParser : IStatementParser
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out result);
+    }
+
+    private static int DetermineStatementYear(
+        IEnumerable<Trade> trades,
+        IEnumerable<RawDividend> dividends,
+        IEnumerable<RawWithholdingTax> withholdingTaxes)
+    {
+        var years = trades.Select(t => t.DateTime.Year)
+            .Concat(dividends.Select(d => d.Date.Year))
+            .Concat(withholdingTaxes.Select(t => t.Date.Year))
+            .ToList();
+
+        if (years.Count == 0)
+        {
+            throw new FormatException(
+                "No trades or dividends found. Please upload a valid Trading 212 CSV export.");
+        }
+
+        return years.Max();
     }
 
     private static (string Currency, decimal Amount) NormalizeMonetaryAmount(string currency, decimal amount)

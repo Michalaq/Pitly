@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import { Upload, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { importFile } from '../api';
+import { importFiles } from '../api';
 import type { AppState } from '../types';
 
 type Step = 'idle' | 'parsing' | 'rates' | 'calculating' | 'done' | 'error';
 
 const steps: { key: Step; label: string }[] = [
-  { key: 'parsing', label: 'Parsing file...' },
+  { key: 'parsing', label: 'Parsing statements...' },
   { key: 'rates', label: 'Fetching PLN exchange rates...' },
   { key: 'calculating', label: 'Calculating taxes...' },
   { key: 'done', label: 'Complete!' },
@@ -38,11 +38,17 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
 
   const [dragOver, setDragOver] = useState(false);
 
-  const processFile = useCallback(async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      setError('Please upload a CSV file.');
+  const processFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) {
+      setError('Please upload at least one CSV file.');
       return;
     }
+
+    if (files.some(file => !file.name.toLowerCase().endsWith('.csv'))) {
+      setError('Please upload CSV files only.');
+      return;
+    }
+
     setError('');
     setStep('parsing');
 
@@ -50,7 +56,7 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
     const timer2 = setTimeout(() => setStep('calculating'), 1200);
 
     try {
-      const result = await importFile(file);
+      const result = await importFiles(files);
       clearTimeout(timer1);
       clearTimeout(timer2);
       setStep('done');
@@ -73,14 +79,14 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-  }, [processFile]);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) processFiles(files);
+  }, [processFiles]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
-  }, [processFile]);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) processFiles(files);
+  }, [processFiles]);
 
   const isProcessing = step !== 'idle' && step !== 'error';
 
@@ -88,7 +94,7 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
     <div className="max-w-2xl mx-auto mt-16">
       <h1 className="text-white text-3xl font-bold text-center mb-2">Import Activity Statement</h1>
       <p className="text-slate-400 text-center mb-10">
-        Upload your broker statement to calculate Polish taxes
+        Upload one or more broker statements to calculate Polish taxes
       </p>
 
       {!isProcessing ? (
@@ -102,9 +108,9 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
             }`}
           >
             <Upload className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-            <p className="text-slate-300 font-medium mb-1">Drag & drop your CSV file here</p>
-            <p className="text-slate-500 text-sm">or click to browse</p>
-            <input type="file" accept=".csv" className="hidden" onChange={handleFileInput} />
+            <p className="text-slate-300 font-medium mb-1">Drag & drop your CSV files here</p>
+            <p className="text-slate-500 text-sm">or click to browse. Upload prior years too if you sold older holdings.</p>
+            <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileInput} />
           </label>
 
           {error && (
@@ -119,14 +125,15 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
               <p>1. Log in to IB Client Portal</p>
               <p>2. Go to <strong className="text-slate-300">Reports &rarr; Statements &rarr; Activity</strong></p>
               <p>3. Select period (full year), format: <strong className="text-slate-300">CSV</strong></p>
-              <p>4. Download and upload here</p>
+              <p>4. If you sold shares bought in earlier years, upload those earlier yearly CSVs together.</p>
+              <p>5. If the statement includes stock splits, keep the related earlier years in the same upload.</p>
             </HelpSection>
             <HelpSection title="How to export from Trading 212">
               <p>1. Log in to Trading 212</p>
               <p>2. Go to <strong className="text-slate-300">History</strong> (clock icon)</p>
               <p>3. Click the <strong className="text-slate-300">Download</strong> icon</p>
               <p>4. Select date range (full tax year) and export as CSV</p>
-              <p>5. Upload here</p>
+              <p>5. Upload one or more yearly CSVs together if you need prior-year FIFO history</p>
             </HelpSection>
           </div>
         </>

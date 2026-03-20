@@ -31,7 +31,7 @@ If you invest through a foreign broker from Poland, every year by **April 30** y
 
 ## Features
 
-- **One-click CSV import** — drag & drop your broker statement, the app handles the rest
+- **One-click CSV import** — drag & drop one or more broker statements, the app merges prior years when FIFO history is needed
 - **Automatic PLN conversion** — fetches official [NBP mid exchange rates](https://api.nbp.pl/) for every transaction date (last business day before, per Polish tax law)
 - **FIFO capital gains calculation** — buy lots are queued per symbol, sells dequeue first-in-first-out to compute cost basis in PLN
 - **Dividend tax with foreign credit** — calculates Polish 19% tax and offsets US withholding (typically 15% under the PL-US treaty)
@@ -104,6 +104,7 @@ npm install && npm run dev
 4. Set the period to the full tax year (e.g. January 1 – December 31, 2024)
 5. Select format: **CSV**
 6. Upload the downloaded file in the app
+7. If you sold shares bought in earlier years, upload those earlier yearly CSVs together so Pitly can reconstruct FIFO lots and stock splits
 
 ### Trading 212
 
@@ -112,6 +113,7 @@ npm install && npm run dev
 3. Click the **Download** icon
 4. Select date range (full tax year) and export as CSV
 5. Upload the downloaded file in the app
+6. Upload earlier yearly CSVs together when you need prior-year FIFO history
 
 A sample IB statement is provided at [`samples/sample-activity-statement.csv`](samples/sample-activity-statement.csv) for testing.
 
@@ -142,6 +144,7 @@ A sample IB statement is provided at [`samples/sample-activity-statement.csv`](s
 
 - Only **Stocks** trades — forex, options, futures, bonds, and crypto are not supported
 - Only **USD** and **EUR** currencies
+- If you sell a position opened in earlier years, upload those earlier yearly statements too so FIFO cost basis can be reconstructed correctly
 - Loss carryforward from previous years must be applied manually
 - Does not submit PIT-38 electronically — you enter the values yourself
 - Always verify results and consult a tax advisor if unsure

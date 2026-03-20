@@ -12,36 +12,53 @@ public static class ImportEndpoints
                 return Results.BadRequest(new { error = "Expected multipart/form-data" });
 
             var form = await request.ReadFormAsync();
-            var file = form.Files.FirstOrDefault();
+            var files = form.Files
+                .Where(f => f.Length > 0)
+                .ToList();
 
-            if (file is null || file.Length == 0)
+            if (files.Count == 0)
                 return Results.BadRequest(new { error = "No file uploaded" });
 
             const long maxFileSize = 10 * 1024 * 1024; // 10 MB
-            if (file.Length > maxFileSize)
-                return Results.BadRequest(new { error = $"File too large ({file.Length / 1024 / 1024} MB). Maximum allowed size is 10 MB." });
+            var oversizedFile = files.FirstOrDefault(file => file.Length > maxFileSize);
+            if (oversizedFile is not null)
+            {
+                return Results.BadRequest(new
+                {
+                    error = $"File '{oversizedFile.FileName}' is too large ({oversizedFile.Length / 1024 / 1024} MB). Maximum allowed size is 10 MB."
+                });
+            }
 
             try
             {
-                var result = await importService.ImportStatementAsync(file.OpenReadStream());
-
-                return Results.Ok(new
+                var streams = files.Select(file => file.OpenReadStream()).ToList();
+                try
                 {
-                    sessionId = result.SessionId,
-                    summary = new
+                    var result = await importService.ImportStatementsAsync(streams);
+
+                    return Results.Ok(new
                     {
-                        result.Summary.TotalProceedsPln,
-                        result.Summary.TotalCostPln,
-                        result.Summary.CapitalGainPln,
-                        result.Summary.CapitalGainTaxPln,
-                        result.Summary.TotalDividendsPln,
-                        result.Summary.TotalWithholdingPln,
-                        result.Summary.DividendTaxOwedPln,
-                        result.Summary.Year
-                    },
-                    trades = result.Summary.TradeResults,
-                    dividends = result.Summary.Dividends
-                });
+                        sessionId = result.SessionId,
+                        summary = new
+                        {
+                            result.Summary.TotalProceedsPln,
+                            result.Summary.TotalCostPln,
+                            result.Summary.CapitalGainPln,
+                            result.Summary.CapitalGainTaxPln,
+                            result.Summary.TotalDividendsPln,
+                            result.Summary.TotalWithholdingPln,
+                            result.Summary.DividendTaxOwedPln,
+                            result.Summary.Year
+                        },
+                        trades = result.Summary.TradeResults,
+                        dividends = result.Summary.Dividends
+                    });
+                }
+                finally
+                {
+                    foreach (var stream in streams)
+                        stream.Dispose();
+                }
             }
             catch (FormatException ex)
             {

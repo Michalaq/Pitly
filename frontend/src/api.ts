@@ -4,7 +4,18 @@ const BASE = '/api';
 
 export async function importFile(file: File): Promise<ImportResponse> {
   const form = new FormData();
-  form.append('file', file);
+  form.append('files', file);
+  const res = await fetch(`${BASE}/import`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Import failed' }));
+    throw new Error(err.error || 'Import failed');
+  }
+  return res.json();
+}
+
+export async function importFiles(files: File[]): Promise<ImportResponse> {
+  const form = new FormData();
+  files.forEach(file => form.append('files', file));
   const res = await fetch(`${BASE}/import`, { method: 'POST', body: form });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Import failed' }));

@@ -24,18 +24,28 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
         }
 
         var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var tradeRows = new List<List<string>>();
+        var dividendRows = new List<List<string>>();
+        var withholdingRows = new List<List<string>>();
+        var corporateActionRows = new List<List<string>>();
+        var carryInRows = new List<List<string>>();
+        var symbolToIsin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var trades = new List<Trade>();
         var dividends = new List<RawDividend>();
         var withholdingTaxes = new List<RawWithholdingTax>();
+        var corporateActions = new List<CorporateAction>();
+        var carryInPositions = new List<CarryInPosition>();
+        var unsupportedCorporateActions = new List<string>();
 
         var hasTrades = false;
         var hasDividends = false;
         var hasWithholding = false;
+        int? statementYear = null;
 
         foreach (var rawLine in lines)
         {
-            var line = rawLine.Trim();
-            if (string.IsNullOrEmpty(line)) continue;
+            var line = rawLine.TrimEnd('\r');
+            if (string.IsNullOrWhiteSpace(line)) continue;
 
             var fields = ParseCsvLine(line);
             if (fields.Count < 2) continue;
@@ -44,17 +54,29 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
 
             switch (section)
             {
+                case "Statement":
+                    TryParseStatementYear(fields, ref statementYear);
+                    break;
                 case "Trades":
                     hasTrades = true;
-                    TryParseTrade(fields, trades);
+                    tradeRows.Add(fields);
                     break;
                 case "Dividends":
                     hasDividends = true;
-                    TryParseDividend(fields, dividends);
+                    dividendRows.Add(fields);
                     break;
                 case "Withholding Tax":
                     hasWithholding = true;
-                    TryParseWithholdingTax(fields, withholdingTaxes);
+                    withholdingRows.Add(fields);
+                    break;
+                case "Financial Instrument Information":
+                    TryParseFinancialInstrument(fields, symbolToIsin);
+                    break;
+                case "Corporate Actions":
+                    corporateActionRows.Add(fields);
+                    break;
+                case "Mark-to-Market Performance Summary":
+                    carryInRows.Add(fields);
                     break;
             }
         }
@@ -63,10 +85,43 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
             throw new FormatException(
                 "File does not appear to be an IB Activity Statement. Please export in CSV format.");
 
-        return new ParsedStatement(trades, dividends, withholdingTaxes);
+        foreach (var fields in tradeRows)
+            TryParseTrade(fields, trades, symbolToIsin);
+
+        foreach (var fields in dividendRows)
+            TryParseDividend(fields, dividends);
+
+        foreach (var fields in withholdingRows)
+            TryParseWithholdingTax(fields, withholdingTaxes);
+
+        statementYear ??= InferStatementYear(trades, dividends, withholdingTaxes);
+
+        foreach (var fields in corporateActionRows)
+            TryParseCorporateAction(fields, corporateActions, unsupportedCorporateActions, symbolToIsin);
+
+        foreach (var fields in carryInRows)
+            TryParseCarryInPosition(fields, carryInPositions, symbolToIsin, statementYear);
+
+        if (unsupportedCorporateActions.Count > 0)
+        {
+            throw new FormatException(
+                "This Interactive Brokers statement contains unsupported stock corporate actions. " +
+                $"Pitly currently supports stock splits only. First unsupported row: '{unsupportedCorporateActions[0]}'.");
+        }
+
+        return new ParsedStatement(
+            trades,
+            dividends,
+            withholdingTaxes,
+            corporateActions,
+            carryInPositions,
+            statementYear);
     }
 
-    private void TryParseTrade(List<string> fields, List<Trade> trades)
+    private void TryParseTrade(
+        List<string> fields,
+        List<Trade> trades,
+        IReadOnlyDictionary<string, string> symbolToIsin)
     {
         // CSV: Trades,Data,DataDiscriminator,AssetCategory,Currency,Symbol,DateTime,Qty,Price,CPrice,Proceeds,Comm,Basis,RealizedPnL,MTM,Code
         // Index: 0     1    2                3             4        5      6        7   8     9      10       11   12    13          14  15
@@ -128,12 +183,13 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
         var tradeType = quantity > 0 ? TradeType.Buy : TradeType.Sell;
         quantity = Math.Abs(quantity);
         proceeds = Math.Abs(proceeds);
+        symbolToIsin.TryGetValue(symbol, out var isin);
 
         trades.Add(new Trade(symbol, currency, dateTime, quantity, price, proceeds,
-            Math.Abs(commission), currency, realizedPnl, tradeType));
+            Math.Abs(commission), currency, realizedPnl, tradeType, isin));
     }
 
-    private (string Symbol, string Currency, DateTime Date, decimal Amount)? TryParseIncomeRow(
+    private (string Symbol, string? Isin, string Currency, DateTime Date, decimal Amount)? TryParseIncomeRow(
         List<string> fields, string sectionName, bool skipReversals)
     {
         if (fields.Count < 2) return null;
@@ -155,12 +211,14 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
         if (description.Contains("Total", StringComparison.OrdinalIgnoreCase)) return null;
         if (skipReversals && description.Contains("Reversal", StringComparison.OrdinalIgnoreCase)) return null;
 
-        var symbol = ExtractSymbolFromDescription(description);
-        if (symbol == null)
+        var instrument = ExtractInstrumentFromDescription(description);
+        if (instrument is null)
         {
             _logger.LogWarning("Skipping {Section} row: could not extract symbol from '{Description}'", sectionName, description);
             return null;
         }
+
+        var (symbol, isin) = instrument.Value;
 
         if (!TryParseDate(dateStr, out var date))
         {
@@ -173,33 +231,154 @@ public partial class InteractiveBrokersStatementParser : IStatementParser
             return null;
         }
 
-        return (symbol, currency, date, amount);
+        return (symbol, isin, currency, date, amount);
     }
 
     private void TryParseDividend(List<string> fields, List<RawDividend> dividends)
     {
         var row = TryParseIncomeRow(fields, "dividend", skipReversals: true);
         if (row is null) return;
-        var (symbol, currency, date, amount) = row.Value;
-        dividends.Add(new RawDividend(symbol, currency, date, amount));
+        var (symbol, isin, currency, date, amount) = row.Value;
+        dividends.Add(new RawDividend(symbol, currency, date, amount, isin));
     }
 
     private void TryParseWithholdingTax(List<string> fields, List<RawWithholdingTax> taxes)
     {
         var row = TryParseIncomeRow(fields, "withholding tax", skipReversals: false);
         if (row is null) return;
-        var (symbol, currency, date, amount) = row.Value;
-        taxes.Add(new RawWithholdingTax(symbol, currency, date, Math.Abs(amount)));
+        var (symbol, isin, currency, date, amount) = row.Value;
+        taxes.Add(new RawWithholdingTax(symbol, currency, date, Math.Abs(amount), isin));
     }
 
-    private static string? ExtractSymbolFromDescription(string description)
+    private static (string Symbol, string? Isin)? ExtractInstrumentFromDescription(string description)
     {
-        var match = SymbolRegex().Match(description);
-        return match.Success ? match.Groups[1].Value : null;
+        var match = InstrumentDescriptionRegex().Match(description);
+        if (!match.Success)
+            return null;
+
+        var symbol = match.Groups["symbol"].Value;
+        var isin = match.Groups["isin"].Success ? match.Groups["isin"].Value : null;
+        return (symbol, isin);
     }
 
-    [GeneratedRegex(@"^(\w+)\s*\(")]
-    private static partial Regex SymbolRegex();
+    [GeneratedRegex(@"^\s*(?<symbol>\w+)\s*\((?<isin>[^)]+)\)", RegexOptions.IgnoreCase)]
+    private static partial Regex InstrumentDescriptionRegex();
+
+    [GeneratedRegex(@"^\s*(?<symbol>\w+)\s*\((?<isin>[^)]+)\)\s+(?:Reverse\s+)?Split\s+(?<num>\d+(?:\.\d+)?)\s+for\s+(?<den>\d+(?:\.\d+)?)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex StockSplitRegex();
+
+    private void TryParseStatementYear(List<string> fields, ref int? statementYear)
+    {
+        if (fields.Count < 4 || Clean(fields[1]) != "Data" || Clean(fields[2]) != "Period")
+            return;
+
+        var period = Clean(fields[3]);
+        var parts = period.Split(" - ", 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+            return;
+
+        if (DateTime.TryParseExact(parts[1], "MMMM d, yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var endDate))
+            statementYear = endDate.Year;
+    }
+
+    private void TryParseFinancialInstrument(List<string> fields, Dictionary<string, string> symbolToIsin)
+    {
+        if (fields.Count < 7 || Clean(fields[1]) != "Data" || Clean(fields[2]) != "Stocks")
+            return;
+
+        var symbol = Clean(fields[3]);
+        var isin = Clean(fields[6]);
+        if (!string.IsNullOrWhiteSpace(symbol) && !string.IsNullOrWhiteSpace(isin))
+            symbolToIsin[symbol] = isin;
+    }
+
+    private void TryParseCorporateAction(
+        List<string> fields,
+        List<CorporateAction> corporateActions,
+        List<string> unsupportedCorporateActions,
+        IReadOnlyDictionary<string, string> symbolToIsin)
+    {
+        if (fields.Count < 7 || Clean(fields[1]) != "Data" || Clean(fields[2]) != "Stocks")
+            return;
+
+        var description = Clean(fields[6]);
+        if (string.IsNullOrWhiteSpace(description) || description.Contains("Total", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var match = StockSplitRegex().Match(description);
+        if (!match.Success)
+        {
+            unsupportedCorporateActions.Add(description);
+            return;
+        }
+
+        var dateTimeStr = Clean(fields[5]);
+        if (!TryParseDateTime(dateTimeStr, out var dateTime))
+        {
+            _logger.LogWarning("Skipping corporate action row: could not parse date '{DateStr}'", dateTimeStr);
+            return;
+        }
+
+        if (!TryParseDecimal(match.Groups["num"].Value, out var numerator) ||
+            !TryParseDecimal(match.Groups["den"].Value, out var denominator))
+        {
+            unsupportedCorporateActions.Add(description);
+            return;
+        }
+
+        var symbol = match.Groups["symbol"].Value;
+        var isin = match.Groups["isin"].Value;
+        if (string.IsNullOrWhiteSpace(isin) && symbolToIsin.TryGetValue(symbol, out var mappedIsin))
+            isin = mappedIsin;
+
+        corporateActions.Add(new CorporateAction(
+            Symbol: symbol,
+            DateTime: dateTime,
+            Type: CorporateActionType.StockSplit,
+            Numerator: numerator,
+            Denominator: denominator,
+            Isin: string.IsNullOrWhiteSpace(isin) ? null : isin));
+    }
+
+    private void TryParseCarryInPosition(
+        List<string> fields,
+        List<CarryInPosition> carryInPositions,
+        IReadOnlyDictionary<string, string> symbolToIsin,
+        int? statementYear)
+    {
+        if (statementYear is null)
+            return;
+
+        if (fields.Count < 5 || Clean(fields[1]) != "Data" || Clean(fields[2]) != "Stocks")
+            return;
+
+        var symbol = Clean(fields[3]);
+        var quantityStr = Clean(fields[4]);
+        if (!TryParseDecimal(quantityStr, out var quantity) || quantity <= 0)
+            return;
+
+        symbolToIsin.TryGetValue(symbol, out var isin);
+        carryInPositions.Add(new CarryInPosition(symbol, quantity, statementYear.Value, isin));
+    }
+
+    private static int InferStatementYear(
+        IEnumerable<Trade> trades,
+        IEnumerable<RawDividend> dividends,
+        IEnumerable<RawWithholdingTax> withholdingTaxes)
+    {
+        var years = trades.Select(t => t.DateTime.Year)
+            .Concat(dividends.Select(d => d.Date.Year))
+            .Concat(withholdingTaxes.Select(t => t.Date.Year))
+            .ToList();
+
+        if (years.Count == 0)
+        {
+            throw new FormatException(
+                "The statement contains no trades or dividends. Please check that the uploaded file is a valid broker export.");
+        }
+
+        return years.Max();
+    }
 
     private static bool TryParseDateTime(string s, out DateTime result)
     {
