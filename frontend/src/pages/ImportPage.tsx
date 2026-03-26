@@ -35,6 +35,7 @@ function HelpSection({ title, children }: { title: string; children: React.React
 export default function ImportPage({ onComplete }: { onComplete: (data: AppState) => void }) {
   const [step, setStep] = useState<Step>('idle');
   const [error, setError] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const [dragOver, setDragOver] = useState(false);
 
@@ -49,6 +50,12 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
       return;
     }
 
+    // Merge with previously queued files (from a failed attempt), newer file wins on name collision
+    const merged = new Map<string, File>();
+    for (const f of pendingFiles) merged.set(f.name, f);
+    for (const f of files) merged.set(f.name, f);
+    const allFiles = Array.from(merged.values());
+
     setError('');
     setStep('parsing');
 
@@ -56,9 +63,10 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
     const timer2 = setTimeout(() => setStep('calculating'), 1200);
 
     try {
-      const result = await importFiles(files);
+      const result = await importFiles(allFiles);
       clearTimeout(timer1);
       clearTimeout(timer2);
+      setPendingFiles([]);
       setStep('done');
       setTimeout(() => {
         onComplete({
@@ -71,10 +79,11 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
     } catch (err: unknown) {
       clearTimeout(timer1);
       clearTimeout(timer2);
+      setPendingFiles(allFiles);
       setStep('error');
       setError(err instanceof Error ? err.message : 'Import failed');
     }
-  }, [onComplete]);
+  }, [onComplete, pendingFiles]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -114,9 +123,18 @@ export default function ImportPage({ onComplete }: { onComplete: (data: AppState
           </label>
 
           {error && (
-            <div className="mt-4 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 text-sm">
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              {error}
+            <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 text-sm space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+              {pendingFiles.length > 0 && (
+                <div className="ml-7 text-slate-400">
+                  <span className="text-slate-300">Already queued:</span>{' '}
+                  {pendingFiles.map(f => f.name).join(', ')}
+                  <span className="block mt-1">Upload any additional prior-year files and they will be combined automatically.</span>
+                </div>
+              )}
             </div>
           )}
 
