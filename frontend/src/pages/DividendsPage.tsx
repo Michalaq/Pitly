@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Info, Search } from 'lucide-react';
-import { formatPln, formatUsd, formatRate, formatDate } from '../format';
+import { formatPln, formatUsd, formatRate, formatDate, formatTaxPeriod, hasCustomTaxPeriod } from '../format';
 import type { AppState } from '../types';
 import EmptyState from '../components/EmptyState';
 
@@ -32,7 +32,17 @@ export default function DividendsPage({ state }: { state: AppState }) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-white text-2xl font-bold">Dividends</h1>
+      <div>
+        <h1 className="text-white text-2xl font-bold">Dividends</h1>
+        <p className="text-slate-400 text-sm mt-1">
+          Showing dividends received in {formatTaxPeriod(state.summary.taxableFrom, state.summary.taxableTo)}.
+        </p>
+        {hasCustomTaxPeriod(state.summary.year, state.summary.taxableFrom) && (
+          <p className="text-slate-500 text-sm mt-1">
+            Only dividends paid on or after the residency start date are included.
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative">
