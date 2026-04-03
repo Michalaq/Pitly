@@ -22,11 +22,12 @@ public class NbpExchangeRateService : INbpExchangeRateService
     {
         if (currency.Equals("PLN", StringComparison.OrdinalIgnoreCase))
             return 1m;
+        const int maxAttempts = 10;
 
         // Polish tax law: rate from last business day BEFORE the transaction date
         var rateDate = transactionDate.Date.AddDays(-1);
 
-        for (int attempt = 0; attempt < 5; attempt++)
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
             var dateStr = rateDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var cacheKey = $"{currency.ToUpperInvariant()}_{dateStr}";
@@ -59,16 +60,16 @@ public class NbpExchangeRateService : INbpExchangeRateService
                 _logger.LogDebug("NBP rate for {Currency} on {Date}: {Rate}", currency, dateStr, rate);
                 return rate;
             }
-            catch (HttpRequestException ex) when (attempt < 4)
+            catch (HttpRequestException ex) when (attempt < maxAttempts - 1)
             {
-                _logger.LogWarning(ex, "NBP API request failed for {Currency} on {Date} (attempt {Attempt}/5), retrying",
-                    currency, dateStr, attempt + 1);
+                _logger.LogWarning(ex, "NBP API request failed for {Currency} on {Date} (attempt {Attempt}/{MaxAttempts}), retrying",
+                    currency, dateStr, attempt + 1, maxAttempts);
                 rateDate = rateDate.AddDays(-1);
             }
         }
 
-        _logger.LogError("Failed to get NBP rate for {Currency} near {Date} after 5 attempts", currency, transactionDate);
+        _logger.LogError("Failed to get NBP rate for {Currency} near {Date} after {MaxAttempts} attempts", currency, transactionDate, maxAttempts);
         throw new InvalidOperationException(
-            $"Could not find NBP exchange rate for {currency} near {transactionDate:yyyy-MM-dd} after 5 attempts.");
+            $"Could not find NBP exchange rate for {currency} near {transactionDate:yyyy-MM-dd} after {maxAttempts} attempts.");
     }
 }
